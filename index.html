@@ -1,41 +1,41 @@
-<!-- โหลดไลบรารีแผนที่ฟรี (Leaflet.js) -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบบันทึกสิ่งของ</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<style>
-    body { margin: 0; padding: 0; font-family: sans-serif; }
-    #map { height: 100vh; width: 100vw; }
-</style>
+    <style>
+        body { margin: 0; padding: 0; font-family: sans-serif; }
+        #map { height: 100vh; width: 100vw; }
+    </style>
+</head>
+<body>
 
 <div id="map"></div>
 
 <script>
-    // 1. กำหนดพิกัดโรงเรียนคลองขวาง และขอบเขตแผนที่
     const schoolLatLng = [12.33904, 102.6384];
-    
-    const bounds = L.latLngBounds(
-        [12.3360, 102.6350],
-        [12.3420, 102.6420] 
-    );
+    const bounds = L.latLngBounds([12.3360, 102.6350], [12.3420, 102.6420]);
 
-    // 2. สร้างแผนที่พร้อมปรับให้ซูมลึกได้ถึงระดับ 21!
     const map = L.map('map', {
         center: schoolLatLng,
         zoom: 18,
-        minZoom: 17,             // ซูมออกได้ไกลสุด
-        maxZoom: 21,             // 🔥 ปรับให้ซูมเข้าใกล้สุดๆ ได้ถึงระดับ 21
-        maxBounds: bounds,       
-        maxBoundsViscosity: 1.0  
+        minZoom: 17,
+        maxZoom: 21,
+        maxBounds: bounds,
+        maxBoundsViscosity: 1.0
     });
 
-    // 3. ดึงภาพแผนที่แบบดาวเทียม (ตั้งค่า maxNativeZoom เพื่อกันภาพขาวเวลาซูมลึก)
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri',
-        maxNativeZoom: 18, // ไฟล์ภาพจริงมีถึงระดับ 18
-        maxZoom: 21        // 🔥 ขยายภาพดิจิทัลต่อจนถึงระดับ 21 โดยไม่กลายเป็นหน้าจอขาว
+        maxNativeZoom: 18,
+        maxZoom: 21
     }).addTo(map);
 
-    // 4. เมื่อกดลงบนแผนที่ ให้เด้ง Popup เลือกสิ่งของ
     map.on('click', function(e) {
         const lat = e.latlng.lat.toFixed(6);
         const lng = e.latlng.lng.toFixed(6);
@@ -70,7 +70,6 @@
             .openOn(map);
     });
 
-    // ฟังก์ชันบันทึกหมุด
     function saveItemPin(lat, lng) {
         const itemCategory = document.getElementById('item_category').value;
         const itemFeature = document.getElementById('item_feature').value || 'ไม่ระบุ';
@@ -85,3 +84,5 @@
             .openPopup();
     }
 </script>
+</body>
+</html>
