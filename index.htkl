@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบบันทึกสิ่งของ</title>
+    
+    <!-- Leaflet Map CSS/JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        body { margin: 0; padding: 0; font-family: sans-serif; }
+        #map { height: 100vh; width: 100vw; }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<script>
+    const schoolLatLng = [12.33904, 102.6384];
+    const bounds = L.latLngBounds([12.3360, 102.6350], [12.3420, 102.6420]);
+
+    const map = L.map('map', {
+        center: schoolLatLng,
+        zoom: 18,
+        minZoom: 16,
+        maxZoom: 22,
+        maxBounds: bounds,
+        maxBoundsViscosity: 1.0
+    });
+
+    // เปลี่ยนมาใช้ภาพดาวเทียมความละเอียดสูงของ Google Maps
+    L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+        maxZoom: 22,
+        maxNativeZoom: 20, // ดึงความละเอียดภาพเนทีฟสูงสุดจาก Google
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        attribution: '&copy; Google Maps'
+    }).addTo(map);
+
+    map.on('click', function(e) {
+        const lat = e.latlng.lat.toFixed(6);
+        const lng = e.latlng.lng.toFixed(6);
+
+        const popupContent = `
+            <div style="padding: 5px; width: 200px;">
+                <h4 style="margin: 0 0 10px 0; color: #333; text-align: center;">บันทึกสิ่งของใหม่</h4>
+                <p style="margin: 0 0 8px 0; font-size: 11px; color: #666; text-align: center;">พิกัด: ${lat}, ${lng}</p>
+                
+                <label style="font-size: 13px; color: #333;"><b>🔹 เลือกสิ่งของ:</b></label><br>
+                <select id="item_category" style="width: 100%; margin-bottom: 10px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+                    <option value="แก้ว">🥛 แก้ว</option>
+                    <option value="กระเป๋า">🎒 กระเป๋า</option>
+                    <option value="ช้อนส้อม">🍴 ช้อนส้อม</option>
+                    <option value="แปรง">🪥 แปรง</option>
+                    <option value="ยาสีฟัน">🧴 ยาสีฟัน</option>
+                    <option value="เงิน">💰 เงิน</option>
+                </select><br>
+
+                <label style="font-size: 13px; color: #333;"><b>✨ ระบุลักษณะเด่น:</b></label><br>
+                <input type="text" id="item_feature" placeholder="เช่น สี, ยี่ห้อ, ขนาด..." style="width: 100%; margin-bottom: 10px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;"><br>
+
+                <button onclick="saveItemPin(${e.latlng.lat}, ${e.latlng.lng})" style="width: 100%; background: #28a745; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">
+                    💾 บันทึกจุดนี้
+                </button>
+            </div>
+        `;
+
+        L.popup()
+            .setLatLng(e.latlng)
+            .setContent(popupContent)
+            .openOn(map);
+    });
+
+    function saveItemPin(lat, lng) {
+        const itemCategory = document.getElementById('item_category').value;
+        const itemFeature = document.getElementById('item_feature').value || 'ไม่ระบุ';
+
+        L.marker([lat, lng]).addTo(map)
+            .bindPopup(`
+                <div style="text-align: center;">
+                    <b style="font-size: 16px; color: #007bff;">${itemCategory}</b><br>
+                    <p style="margin: 5px 0 0 0; color: #333; font-size: 13px;"><b>ลักษณะเด่น:</b> ${itemFeature}</p>
+                </div>
+            `)
+            .openPopup();
+    }
+</script>
+</body>
+</html>
