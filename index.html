@@ -12,91 +12,276 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#3b82f6">
 
-    <!-- ดึงรูป icon.png ที่แก้ชื่อแล้วมาทำเป็นไอคอนแอปบนหน้าจอมือถือ -->
-    <link rel="apple-touch-icon" href="icon.png">
-    <link rel="icon" type="image/png" href="icon.png">
+    <!-- ดึงรูป icon.png มาทำเป็นไอคอนแอป -->
+    <link rel="apple-touch-icon" href="icon.png?v=2">
+    <link rel="icon" type="image/png" href="icon.png?v=2">
 
     <!-- Leaflet Map CSS/JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        #map { height: 100vh; width: 100vw; }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8fafc; }
+        #map { height: 100vh; width: 100vw; display: none; }
+
+        /* หน้าสมัครสมาชิก / Login */
+        #login-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: white;
+            padding: 30px 25px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            text-align: center;
+            width: 100%;
+            max-width: 360px;
+        }
+
+        .login-card img {
+            width: 100px;
+            height: 100px;
+            border-radius: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .login-card h2 { margin: 0 0 10px 0; color: #1e293b; font-size: 22px; }
+        .login-card p { margin: 0 0 20px 0; color: #64748b; font-size: 14px; }
+
+        .login-card input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            margin-bottom: 15px;
+            outline: none;
+            text-align: center;
+        }
+
+        .login-card input:focus { border-color: #3b82f6; }
+
+        .login-card button {
+            width: 100%;
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .login-card button:hover { background: #1d4ed8; }
+
+        /* แถบแสดงชื่อผู้ใช้บนแผนที่ */
+        .user-bar {
+            position: absolute;
+            top: 15px; right: 15px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 15px;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            font-size: 13px;
+            font-weight: bold;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-logout {
+            background: #ef4444; color: white; border: none;
+            padding: 3px 8px; border-radius: 10px; font-size: 11px;
+            cursor: pointer; margin-left: 5px;
+        }
     </style>
 </head>
 <body>
 
+<!-- หน้าเข้าสู่ระบบ/สมัครสมาชิก -->
+<div id="login-screen">
+    <div class="login-card">
+        <img src="icon.png?v=2" alt="FoundBox Logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/854/854878.png'">
+        <h2>ยินดีต้อนรับสู่ FoundBox</h2>
+        <p>กรุณากรอกชื่อของคุณเพื่อเข้าใช้งานระบบ</p>
+        <input type="text" id="user_name_input" placeholder="พิมพ์ชื่อของคุณที่นี่..." autocomplete="off">
+        <button onclick="loginUser()">เริ่มใช้งานแอป</button>
+    </div>
+</div>
+
+<!-- หน้าแผนที่ -->
 <div id="map"></div>
+<div id="user-bar" class="user-bar" style="display: none;">
+    👤 <span id="display_user_name"></span>
+    <button class="btn-logout" onclick="logoutUser()">สลับชื่อ</button>
+</div>
 
 <script>
-    const schoolLatLng = [12.33904, 102.6384];
-    const bounds = L.latLngBounds([12.3360, 102.6350], [12.3420, 102.6420]);
+    let map;
+    let savedPins = JSON.parse(localStorage.getItem('foundbox_pins')) || [];
+    let currentUser = localStorage.getItem('foundbox_user');
 
-    const map = L.map('map', {
-        center: schoolLatLng,
-        zoom: 18,
-        minZoom: 16,
-        maxZoom: 22,
-        maxBounds: bounds,
-        maxBoundsViscosity: 1.0
-    });
+    // ตรวจสอบว่าเคยลงชื่อไว้หรือยังเมื่อเปิดแอป
+    window.onload = function() {
+        if (currentUser) {
+            startApp();
+        }
+    };
 
-    // ภาพดาวเทียม Google คมชัดสูง
-    L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
-        maxZoom: 22,
-        maxNativeZoom: 20,
-        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-        attribution: '&copy; Google Maps'
-    }).addTo(map);
+    function loginUser() {
+        const nameInput = document.getElementById('user_name_input').value.trim();
+        if (!nameInput) {
+            alert('กรุณากรอกชื่อก่อนเข้าใช้งานครับ');
+            return;
+        }
+        localStorage.setItem('foundbox_user', nameInput);
+        currentUser = nameInput;
+        startApp();
+    }
 
-    map.on('click', function(e) {
-        const lat = e.latlng.lat.toFixed(6);
-        const lng = e.latlng.lng.toFixed(6);
+    function logoutUser() {
+        if (confirm('คุณต้องการเปลี่ยนผู้ใช้งานใช่หรือไม่?')) {
+            localStorage.removeItem('foundbox_user');
+            location.reload();
+        }
+    }
 
-        const popupContent = `
-            <div style="padding: 5px; width: 210px;">
-                <h4 style="margin: 0 0 10px 0; color: #1e293b; text-align: center;">📍 บันทึกสิ่งของใหม่</h4>
-                <p style="margin: 0 0 8px 0; font-size: 11px; color: #64748b; text-align: center;">พิกัด: ${lat}, ${lng}</p>
-                
-                <label style="font-size: 13px; color: #334155;"><b>🔹 เลือกสิ่งของ:</b></label><br>
-                <select id="item_category" style="width: 100%; margin-bottom: 10px; padding: 8px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
-                    <option value="แก้ว">🥛 แก้ว</option>
-                    <option value="กระเป๋า">🎒 กระเป๋า</option>
-                    <option value="ช้อนส้อม">🍴 ช้อนส้อม</option>
-                    <option value="แปรง">🪥 แปรง</option>
-                    <option value="ยาสีฟัน">🧴 ยาสีฟัน</option>
-                    <option value="เงิน">💰 เงิน</option>
-                </select><br>
+    function startApp() {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('map').style.display = 'block';
+        document.getElementById('user-bar').style.display = 'flex';
+        document.getElementById('display_user_name').innerText = currentUser;
 
-                <label style="font-size: 13px; color: #334155;"><b>✨ ระบุลักษณะเด่น:</b></label><br>
-                <input type="text" id="item_feature" placeholder="เช่น สี, ยี่ห้อ, ขนาด..." style="width: 100%; margin-bottom: 10px; padding: 8px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;"><br>
+        initMap();
+    }
 
-                <button onclick="saveItemPin(${e.latlng.lat}, ${e.latlng.lng})" style="width: 100%; background: #16a34a; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;">
-                    💾 บันทึกจุดนี้
-                </button>
-            </div>
-        `;
+    function initMap() {
+        const schoolLatLng = [12.33904, 102.6384];
+        const bounds = L.latLngBounds([12.3360, 102.6350], [12.3420, 102.6420]);
 
-        L.popup()
-            .setLatLng(e.latlng)
-            .setContent(popupContent)
-            .openOn(map);
-    });
+        map = L.map('map', {
+            center: schoolLatLng,
+            zoom: 18,
+            minZoom: 16,
+            maxZoom: 22,
+            maxBounds: bounds,
+            maxBoundsViscosity: 1.0
+        });
 
+        // ภาพดาวเทียม Google ชัดพิเศษ
+        L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+            maxZoom: 22,
+            maxNativeZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            attribution: '&copy; Google Maps'
+        }).addTo(map);
+
+        // โหลดหมุดที่เคยบันทึกไว้ขึ้นมาแสดง
+        loadSavedPins();
+
+        // คลิกเพื่อปักหมุด
+        map.on('click', function(e) {
+            const lat = e.latlng.lat.toFixed(6);
+            const lng = e.latlng.lng.toFixed(6);
+
+            const popupContent = `
+                <div style="padding: 5px; width: 210px;">
+                    <h4 style="margin: 0 0 10px 0; color: #1e293b; text-align: center;">📍 บันทึกสิ่งของใหม่</h4>
+                    <p style="margin: 0 0 8px 0; font-size: 11px; color: #64748b; text-align: center;">พิกัด: ${lat}, ${lng}</p>
+                    
+                    <label style="font-size: 13px; color: #334155;"><b>🔹 เลือกสิ่งของ:</b></label><br>
+                    <select id="item_category" style="width: 100%; margin-bottom: 10px; padding: 8px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
+                        <option value="แก้ว">🥛 แก้ว</option>
+                        <option value="กระเป๋า">🎒 กระเป๋า</option>
+                        <option value="ช้อนส้อม">🍴 ช้อนส้อม</option>
+                        <option value="แปรง">🪥 แปรง</option>
+                        <option value="ยาสีฟัน">🧴 ยาสีฟัน</option>
+                        <option value="เงิน">💰 เงิน</option>
+                    </select><br>
+
+                    <label style="font-size: 13px; color: #334155;"><b>✨ ระบุลักษณะเด่น:</b></label><br>
+                    <input type="text" id="item_feature" placeholder="เช่น สี, ยี่ห้อ, ขนาด..." style="width: 100%; margin-bottom: 10px; padding: 8px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;"><br>
+
+                    <button onclick="saveItemPin(${e.latlng.lat}, ${e.latlng.lng})" style="width: 100%; background: #16a34a; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;">
+                        💾 บันทึกจุดนี้
+                    </button>
+                </div>
+            `;
+
+            L.popup()
+                .setLatLng(e.latlng)
+                .setContent(popupContent)
+                .openOn(map);
+        });
+    }
+
+    // บันทึกหมุดใหม่ลงใน LocalStorage
     function saveItemPin(lat, lng) {
         const itemCategory = document.getElementById('item_category').value;
         const itemFeature = document.getElementById('item_feature').value || 'ไม่ระบุ';
 
-        L.marker([lat, lng]).addTo(map)
-            .bindPopup(`
-                <div style="text-align: center;">
-                    <b style="font-size: 16px; color: #2563eb;">${itemCategory}</b><br>
-                    <p style="margin: 5px 0 0 0; color: #334155; font-size: 13px;"><b>ลักษณะเด่น:</b> ${itemFeature}</p>
-                </div>
-            `)
-            .openPopup();
+        const pinData = {
+            id: Date.now(),
+            lat: lat,
+            lng: lng,
+            category: itemCategory,
+            feature: itemFeature,
+            savedBy: currentUser
+        };
+
+        savedPins.push(pinData);
+        localStorage.setItem('foundbox_pins', JSON.stringify(savedPins));
+
+        addMarkerToMap(pinData);
+        map.closePopup();
+    }
+
+    // แสดงหมุดบนแผนที่
+    function addMarkerToMap(pin) {
+        const marker = L.marker([pin.lat, pin.lng]).addTo(map);
+        
+        const popupHtml = `
+            <div style="text-align: center;">
+                <b style="font-size: 16px; color: #2563eb;">${pin.category}</b><br>
+                <p style="margin: 5px 0; color: #334155; font-size: 13px;"><b>ลักษณะเด่น:</b> ${pin.feature}</p>
+                <p style="margin: 0 0 8px 0; color: #64748b; font-size: 11px;">บันทึกโดย: ${pin.savedBy}</p>
+                <button onclick="deletePin(${pin.id})" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ ลบหมุดนี้</button>
+            </div>
+        `;
+
+        marker.bindPopup(popupHtml);
+    }
+
+    // โหลดหมุดทั้งหมดที่เซฟไว้
+    function loadSavedPins() {
+        savedPins.forEach(pin => {
+            addMarkerToMap(pin);
+        });
+    }
+
+    // ลบหมุดออกจากแผนที่และ LocalStorage
+    function deletePin(id) {
+        if (confirm('คุณต้องการลบหมุดนี้ใช่หรือไม่?')) {
+            savedPins = savedPins.filter(pin => pin.id !== id);
+            localStorage.setItem('foundbox_pins', JSON.stringify(savedPins));
+            location.reload(); // รีโหลดเพื่อให้แผนที่อัปเดตหมุดล่าสุด
+        }
     }
 </script>
 </body>
+</html>
 </html>
