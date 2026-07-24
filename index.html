@@ -5,12 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>FoundBox</title>
     
-    <!-- ตั้งค่าแอปเต็มจอ (PWA) -->
+    <!-- Link ไปยัง Manifest เพื่อให้ติดตั้งเป็นแอปได้ -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+
+    <!-- ตั้งค่า iOS Home Screen -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="FoundBox">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#3b82f6">
 
     <!-- Leaflet Map CSS/JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -24,6 +26,34 @@
         * { box-sizing: border-box; }
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8fafc; }
         #map { height: 100vh; width: 100vw; display: none; }
+
+        /* Banner เด้งชวนดาวน์โหลดแอป */
+        #pwa-install-banner {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 400px;
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 15px 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 10000;
+            border: 2px solid #2563eb;
+        }
+
+        #pwa-install-banner div { display: flex; align-items: center; gap: 12px; }
+        #pwa-install-banner img { width: 40px; height: 40px; border-radius: 10px; }
+        #pwa-install-banner text { font-size: 14px; font-weight: bold; color: #1e293b; }
+        .btn-install {
+            background: #2563eb; color: white; border: none;
+            padding: 8px 14px; border-radius: 10px; font-weight: bold;
+            font-size: 13px; cursor: pointer;
+        }
 
         /* หน้า Login */
         #login-screen {
@@ -95,6 +125,18 @@
 </head>
 <body>
 
+<!-- แถบเด้งชวนติดตั้งแอป -->
+<div id="pwa-install-banner">
+    <div>
+        <span style="font-size: 28px;">📍</span>
+        <div>
+            <div style="font-size: 14px; font-weight: bold; color: #1e293b;">ติดตั้ง FoundBox</div>
+            <div style="font-size: 11px; color: #64748b;">ดาวน์โหลดไว้หน้าจอเพื่อใช้ง่ายขึ้น</div>
+        </div>
+    </div>
+    <button class="btn-install" id="btn-install-app">ดาวน์โหลด</button>
+</div>
+
 <div id="login-screen">
     <div class="login-card">
         <div style="font-size: 50px; margin-bottom: 10px;">📍</div>
@@ -112,7 +154,7 @@
 </div>
 
 <script>
-    // ใส่ค่า Config จาก Firebase ของคุณเรียบร้อยแล้ว
+    // Firebase Config
     const firebaseConfig = {
         apiKey: "AIzaSyDJ0tbI01DXQx03oY1mpOgCHxRiiYUNwjA",
         authDomain: "foundbox-92981.firebaseapp.com",
@@ -124,13 +166,29 @@
         measurementId: "G-2J9962DK68"
     };
 
-    // เชื่อมต่อ Firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
     let map;
     let mapMarkers = {}; 
     let currentUser = localStorage.getItem('foundbox_user');
+    let deferredPrompt;
+
+    // ระบบเด้งชวนติดตั้งแอป (PWA)
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById('pwa-install-banner').style.display = 'flex';
+    });
+
+    document.getElementById('btn-install-app').addEventListener('click', async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            deferredPrompt = null;
+            document.getElementById('pwa-install-banner').style.display = 'none';
+        }
+    });
 
     document.addEventListener("DOMContentLoaded", function() {
         if (currentUser) {
@@ -187,7 +245,6 @@
             attribution: '&copy; Google Maps'
         }).addTo(map);
 
-        // ฟังการอัปเดตหมุดจาก Firebase สดๆ
         listenToPins();
 
         map.on('click', function(e) {
@@ -225,7 +282,6 @@
         });
     }
 
-    // เซฟหมุดลงเซิร์ฟเวอร์ออนไลน์
     function saveItemPin(lat, lng) {
         const itemCategory = document.getElementById('item_category').value;
         const itemFeature = document.getElementById('item_feature').value || 'ไม่ระบุ';
@@ -243,7 +299,6 @@
         map.closePopup();
     }
 
-    // ดึงหมุดจากเซิร์ฟเวอร์มาแสดงแบบเรียลไทม์
     function listenToPins() {
         db.ref('pins').on('value', (snapshot) => {
             Object.keys(mapMarkers).forEach(id => map.removeLayer(mapMarkers[id]));
@@ -274,7 +329,6 @@
         marker.bindPopup(popupHtml);
     }
 
-    // ลบหมุดออกจากเซิร์ฟเวอร์ออนไลน์
     function deletePin(id) {
         if (confirm('คุณต้องการลบหมุดนี้ใช่หรือไม่?')) {
             db.ref('pins/' + id).remove();
