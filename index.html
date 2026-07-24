@@ -16,12 +16,16 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+    <!-- Firebase SDK (Compat mode) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8fafc; }
         #map { height: 100vh; width: 100vw; display: none; }
 
-        /* หน้าสมัครสมาชิก / Login */
+        /* หน้า Login */
         #login-screen {
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
@@ -57,8 +61,6 @@
             text-align: center;
         }
 
-        .login-card input:focus { border-color: #3b82f6; }
-
         .login-card button {
             width: 100%;
             background: #2563eb;
@@ -71,7 +73,6 @@
             cursor: pointer;
         }
 
-        /* แถบแสดงชื่อผู้ใช้บนแผนที่ */
         .user-bar {
             position: absolute;
             top: 15px; right: 15px;
@@ -83,9 +84,6 @@
             font-size: 13px;
             font-weight: bold;
             color: #1e293b;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
 
         .btn-logout {
@@ -97,7 +95,6 @@
 </head>
 <body>
 
-<!-- หน้าเข้าสู่ระบบ/สมัครสมาชิก -->
 <div id="login-screen">
     <div class="login-card">
         <div style="font-size: 50px; margin-bottom: 10px;">📍</div>
@@ -108,7 +105,6 @@
     </div>
 </div>
 
-<!-- หน้าแผนที่ -->
 <div id="map"></div>
 <div id="user-bar" class="user-bar" style="display: none;">
     👤 <span id="display_user_name"></span>
@@ -116,21 +112,27 @@
 </div>
 
 <script>
+    // ใส่ค่า Config จาก Firebase ของคุณเรียบร้อยแล้ว
+    const firebaseConfig = {
+        apiKey: "AIzaSyDJ0tbI01DXQx03oY1mpOgCHxRiiYUNwjA",
+        authDomain: "foundbox-92981.firebaseapp.com",
+        databaseURL: "https://foundbox-92981-default-rtdb.firebaseio.com",
+        projectId: "foundbox-92981",
+        storageBucket: "foundbox-92981.firebasestorage.app",
+        messagingSenderId: "162232894532",
+        appId: "1:162232894532:web:6ff91092417c6de160a811",
+        measurementId: "G-2J9962DK68"
+    };
+
+    // เชื่อมต่อ Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
     let map;
-    let mapMarkers = {}; // เก็บตัวแปรหมุดตาม ID
-    let savedPins = [];
-    let currentUser = "";
+    let mapMarkers = {}; 
+    let currentUser = localStorage.getItem('foundbox_user');
 
-    // เมื่อโหลดหน้าเว็บเสร็จ
     document.addEventListener("DOMContentLoaded", function() {
-        try {
-            savedPins = JSON.parse(localStorage.getItem('foundbox_pins')) || [];
-        } catch(e) {
-            savedPins = [];
-        }
-        
-        currentUser = localStorage.getItem('foundbox_user');
-
         if (currentUser) {
             startApp();
         }
@@ -164,7 +166,7 @@
     }
 
     function initMap() {
-        if (map) return; // กันการสร้างแผนที่ซ้ำ
+        if (map) return;
 
         const schoolLatLng = [12.33904, 102.6384];
         const bounds = L.latLngBounds([12.3360, 102.6350], [12.3420, 102.6420]);
@@ -178,7 +180,6 @@
             maxBoundsViscosity: 1.0
         });
 
-        // ภาพดาวเทียม Google ชัดพิเศษ
         L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
             maxZoom: 22,
             maxNativeZoom: 20,
@@ -186,10 +187,9 @@
             attribution: '&copy; Google Maps'
         }).addTo(map);
 
-        // โหลดหมุดที่เคยบันทึกไว้ขึ้นมาแสดงทันที
-        loadSavedPins();
+        // ฟังการอัปเดตหมุดจาก Firebase สดๆ
+        listenToPins();
 
-        // คลิกเพื่อปักหมุด
         map.on('click', function(e) {
             const lat = e.latlng.lat.toFixed(6);
             const lng = e.latlng.lng.toFixed(6);
@@ -200,7 +200,7 @@
                     <p style="margin: 0 0 8px 0; font-size: 11px; color: #64748b; text-align: center;">พิกัด: ${lat}, ${lng}</p>
                     
                     <label style="font-size: 13px; color: #334155;"><b>🔹 เลือกสิ่งของ:</b></label><br>
-                    <select id="item_category" style="width: 100%; margin-bottom: 10px; padding: 8px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
+                    <select id="item_category" style="width: 100%; margin-bottom: 10px; padding: 8px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 6px;">
                         <option value="แก้ว">🥛 แก้ว</option>
                         <option value="กระเป๋า">🎒 กระเป๋า</option>
                         <option value="ช้อนส้อม">🍴 ช้อนส้อม</option>
@@ -210,7 +210,7 @@
                     </select><br>
 
                     <label style="font-size: 13px; color: #334155;"><b>✨ ระบุลักษณะเด่น:</b></label><br>
-                    <input type="text" id="item_feature" placeholder="เช่น สี, ยี่ห้อ, ขนาด..." style="width: 100%; margin-bottom: 10px; padding: 8px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;"><br>
+                    <input type="text" id="item_feature" placeholder="เช่น สี, ยี่ห้อ, ขนาด..." style="width: 100%; margin-bottom: 10px; padding: 8px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 6px;"><br>
 
                     <button onclick="saveItemPin(${e.latlng.lat}, ${e.latlng.lng})" style="width: 100%; background: #16a34a; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;">
                         💾 บันทึกจุดนี้
@@ -225,63 +225,59 @@
         });
     }
 
-    // บันทึกหมุดใหม่
+    // เซฟหมุดลงเซิร์ฟเวอร์ออนไลน์
     function saveItemPin(lat, lng) {
         const itemCategory = document.getElementById('item_category').value;
         const itemFeature = document.getElementById('item_feature').value || 'ไม่ระบุ';
+        const pinId = Date.now().toString();
 
-        const pinData = {
-            id: Date.now(),
+        db.ref('pins/' + pinId).set({
+            id: pinId,
             lat: lat,
             lng: lng,
             category: itemCategory,
             feature: itemFeature,
             savedBy: currentUser
-        };
+        });
 
-        savedPins.push(pinData);
-        localStorage.setItem('foundbox_pins', JSON.stringify(savedPins));
-
-        addMarkerToMap(pinData);
         map.closePopup();
     }
 
-    // แสดงหมุดบนแผนที่
+    // ดึงหมุดจากเซิร์ฟเวอร์มาแสดงแบบเรียลไทม์
+    function listenToPins() {
+        db.ref('pins').on('value', (snapshot) => {
+            Object.keys(mapMarkers).forEach(id => map.removeLayer(mapMarkers[id]));
+            mapMarkers = {};
+
+            const data = snapshot.val();
+            if (data) {
+                Object.values(data).forEach(pin => {
+                    addMarkerToMap(pin);
+                });
+            }
+        });
+    }
+
     function addMarkerToMap(pin) {
         const marker = L.marker([pin.lat, pin.lng]).addTo(map);
-        mapMarkers[pin.id] = marker; // บันทึกตัวแปร marker เก็บไว้
+        mapMarkers[pin.id] = marker;
         
         const popupHtml = `
             <div style="text-align: center; width: 180px;">
                 <b style="font-size: 16px; color: #2563eb;">${pin.category}</b><br>
                 <p style="margin: 5px 0; color: #334155; font-size: 13px;"><b>ลักษณะเด่น:</b> ${pin.feature}</p>
                 <p style="margin: 0 0 8px 0; color: #64748b; font-size: 11px;">บันทึกโดย: <b>${pin.savedBy}</b></p>
-                <button onclick="deletePin(${pin.id})" style="background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">🗑️ ลบหมุดนี้</button>
+                <button onclick="deletePin('${pin.id}')" style="background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">🗑️ ลบหมุดนี้</button>
             </div>
         `;
 
         marker.bindPopup(popupHtml);
     }
 
-    // โหลดหมุดทั้งหมดที่เซฟไว้
-    function loadSavedPins() {
-        savedPins.forEach(pin => {
-            addMarkerToMap(pin);
-        });
-    }
-
-    // ลบหมุดทันทีแบบไม่ต้องรีโหลดหน้าเว็บ
+    // ลบหมุดออกจากเซิร์ฟเวอร์ออนไลน์
     function deletePin(id) {
         if (confirm('คุณต้องการลบหมุดนี้ใช่หรือไม่?')) {
-            // ลบจากความจำ LocalStorage
-            savedPins = savedPins.filter(pin => pin.id !== id);
-            localStorage.setItem('foundbox_pins', JSON.stringify(savedPins));
-
-            // ลบหมุดออกจากหน้าแผนที่ทันที
-            if (mapMarkers[id]) {
-                map.removeLayer(mapMarkers[id]);
-                delete mapMarkers[id];
-            }
+            db.ref('pins/' + id).remove();
         }
     }
 </script>
